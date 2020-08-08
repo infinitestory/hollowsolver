@@ -29,7 +29,6 @@ class Grid extends React.Component<GridProps, GridState> {
   }
 
   toggleCell = (coords: Coordinates) => {
-    console.log(coords);
     this.setState((state) => {
       let newState = cloneDeep(state);
       newState.grid[coords.y][coords.x] = !newState.grid[coords.y][coords.x];
@@ -44,8 +43,12 @@ class Grid extends React.Component<GridProps, GridState> {
       display: 'grid',
       gridTemplateColumns: 'repeat(6, 1fr)',
       gridTemplateRows: 'repeat(6, 1fr)',
-      width: '360px',
-      height: '360px',
+      width: '385px',
+      height: '385px',
+      gridGap: '5px',
+      padding: '10px',
+      border: '2px solid rgb(108, 103, 85)',
+      backgroundColor: 'rgb(49, 32, 17)',
     }
 
     return (
@@ -74,10 +77,11 @@ interface GridSquareProps {
 
 const GridSquare = (props: GridSquareProps) => {
   const style = {
-    backgroundColor: props.isSelected? 'blue' : 'green',
-    border: props.isTarget? '2px dashed red' : 'none',
+    backgroundColor: props.isSelected? 'rgb(107, 93, 75)' : 'rgb(76, 53, 50)',
+    border: props.isTarget? '2px dashed red' : '1px solid rgb(108, 103, 85)',
     gridColumn: props.coordinates.x + 1,
     gridRow: props.coordinates.y + 1,
+    borderRadius: '5px',
   }
 
   return (
@@ -150,7 +154,8 @@ const SolveGrid = (grid: boolean[][]) => {
 
     const remainingWideOpen = getOpenCoordinates(3, 2, filledGrid, openWideCoordSet);
     const remainingTallOpen = getOpenCoordinates(2, 3, filledGrid, openTallCoordSet);
-    return -(remainingTallOpen.length + remainingWideOpen.length);
+    const remainingMedOpen = getOpenCoordinates(2, 2, filledGrid, openMedCoordSet);
+    return -((remainingTallOpen.length + remainingWideOpen.length) * 5 + remainingMedOpen.length); // todo fix this
   }), true);
 }
 
