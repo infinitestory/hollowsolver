@@ -5,8 +5,16 @@ import cloneDeep from "lodash-es/cloneDeep";
 import maxBy from "lodash-es/maxBy";
 import range from "lodash-es/range";
 
+enum CellStatus {
+  Unopened = 0,
+  Blocked,
+  Empty,
+  Large,
+  Medium,
+}
+
 interface GridState {
-  grid: boolean[][];
+  grid: CellStatus[][];
 }
 
 interface GridProps {
@@ -18,26 +26,46 @@ class Grid extends React.Component<GridProps, GridState> {
     super(props);
     this.state = {
       grid: [
-  [false, false, false, false, false, false],
-  [false, false, true, false, false, false],
-  [false, false, false, false, true, false],
-  [false, false, false, false, false, true],
-  [false, true, false, false, false, false],
-  [false, false, false, true, false, false],
+  [0, 0, 0, 0, 0, 0],
+  [0, 0, 1, 0, 0, 0],
+  [0, 0, 0, 0, 1, 0],
+  [0, 0, 0, 0, 0, 1],
+  [0, 1, 0, 0, 0, 0],
+  [0, 0, 0, 1, 0, 0],
 ],
     };
   }
 
-  toggleCell = (coords: Coordinates) => {
+  toggleCellBlocked = (coords: Coordinates) => {
     this.setState((state) => {
       let newState = cloneDeep(state);
-      newState.grid[coords.y][coords.x] = !newState.grid[coords.y][coords.x];
+      if (newState.grid[coords.y][coords.x] == CellStatus.Blocked) {
+        newState.grid[coords.y][coords.x] = CellStatus.Unopened;
+      } else {
+        newState.grid[coords.y][coords.x] = CellStatus.Blocked;
+      }
+      return newState;
+    });
+  }
+
+  toggleCellOpened = (coords: Coordinates) => {
+    this.setState((state) => {
+      let newState = cloneDeep(state);
+      if (newState.grid[coords.y][coords.x] == CellStatus.Empty) {
+        newState.grid[coords.y][coords.x] = CellStatus.Large;
+      } else if (newState.grid[coords.y][coords.x] == CellStatus.Large) {
+        newState.grid[coords.y][coords.x] = CellStatus.Medium;
+      } else if (newState.grid[coords.y][coords.x] == CellStatus.Medium) {
+        newState.grid[coords.y][coords.x] = CellStatus.Unopened;
+      } else {
+        newState.grid[coords.y][coords.x] = CellStatus.Empty;
+      }
       return newState;
     });
   }
 
   render() {
-    const targetCoordinates = SolveGrid(this.state.grid);
+    const targetCoordinates = SolveGrid(convertGrid(this.state.grid));
 
     const wrapperStyle = {
       display: 'grid',
@@ -47,7 +75,7 @@ class Grid extends React.Component<GridProps, GridState> {
       height: '385px',
       gridGap: '5px',
       padding: '10px',
-      border: '2px solid rgb(108, 103, 85)',
+      border: '2px ridge rgb(108, 103, 85)',
       backgroundColor: 'rgb(49, 32, 17)',
     }
 
@@ -57,9 +85,10 @@ class Grid extends React.Component<GridProps, GridState> {
           const coords = convertToCoordinates(v, false);
           const gridSquareProps = {
             coordinates: coords,
-            isSelected: this.state.grid[coords.y][coords.x],
+            cellStatus: this.state.grid[coords.y][coords.x],
             isTarget: targetCoordinates.x == coords.x && targetCoordinates.y == coords.y,
-            clickHandler: () => {this.toggleCell(coords)},
+            leftClickHandler: (e: React.MouseEvent) => {e.preventDefault(); this.toggleCellOpened(coords)},
+            rightClickHandler: (e: React.MouseEvent) => {e.preventDefault(); this.toggleCellBlocked(coords)},
           }
           return <GridSquare {...gridSquareProps} key={`grid-${coords.x}-${coords.y}`}/>
         })
@@ -70,14 +99,23 @@ class Grid extends React.Component<GridProps, GridState> {
 
 interface GridSquareProps {
   coordinates: Coordinates;
-  isSelected: boolean;
+  cellStatus: CellStatus;
   isTarget: boolean;
-  clickHandler: (e: React.MouseEvent) => void;
+  leftClickHandler: (e: React.MouseEvent) => void;
+  rightClickHandler: (e: React.MouseEvent) => void;
 }
 
 const GridSquare = (props: GridSquareProps) => {
+  const colors = {
+    [CellStatus.Unopened]: 'rgb(76, 53, 50)',
+    [CellStatus.Blocked]: 'rgb(107, 93, 75)',
+    [CellStatus.Empty]: 'rgb(198, 173, 143)',
+    [CellStatus.Large]: 'rgb(121, 141, 159)',
+    [CellStatus.Medium]: 'rgb(107, 118, 79)',
+  }
+
   const style = {
-    backgroundColor: props.isSelected? 'rgb(107, 93, 75)' : 'rgb(76, 53, 50)',
+    backgroundColor: colors[props.cellStatus],
     border: props.isTarget? '2px dashed red' : '1px solid rgb(108, 103, 85)',
     gridColumn: props.coordinates.x + 1,
     gridRow: props.coordinates.y + 1,
@@ -85,7 +123,7 @@ const GridSquare = (props: GridSquareProps) => {
   }
 
   return (
-    <div style={style} onClick={props.clickHandler}>
+    <div style={style} onClick={props.leftClickHandler} onContextMenu={props.rightClickHandler}>
     </div>
   );
 }
@@ -109,9 +147,11 @@ const SolveGrid = (grid: boolean[][]) => {
   let bestRemaining = openWideCoordSet.length + openTallCoordSet.length + 1;
   let bestRemainingMed = openMedCoordSet.length;
   let bestIndices: [number, number, number] = [0, 0, 0];
-  for (let i = 0; i < 14; i++) {
-    for (let j = i+1; j < 15; j++) {
-      for (let k = j+1; k < 16; k++) {
+  for (let i = 0; i < 16; i++) {
+    for (let j = 0; j < 16; j++) {
+      if (j == i) { continue; }
+      for (let k = 0; k < 16; k++) {
+        if (k == i || k == j) { continue; }
         let filledGrid = cloneDeep(grid);
         const ci = convertToCoordinates(i, true);
         if (filledGrid[ci.y][ci.x]) {
@@ -194,6 +234,10 @@ const convertToCoordinates = (openSquareIndex: number, pad: boolean) => {
     x: (openSquareIndex % (pad ? 4 : 6)) + (pad ? 1 : 0),
     y: Math.floor(openSquareIndex / (pad ? 4 : 6)) + (pad ? 1 : 0),
   } as Coordinates;
+}
+
+const convertGrid = (grid: CellStatus[][]) => {
+  return grid.map(row => row.map(cellStatus => cellStatus != CellStatus.Unopened));
 }
 
 render(
