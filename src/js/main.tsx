@@ -139,6 +139,7 @@ const SolveGrid = (grid: boolean[][]) => {
         const remainingMedOpen = getOpenCoordinates(2, 2, filledGrid, openMedCoordSet);
         const remaining = remainingWideOpen.length + remainingTallOpen.length;
         if ((remaining < bestRemaining) || (remaining == bestRemaining && remainingMedOpen.length < bestRemainingMed)) {
+          console.log(remaining);
           bestRemaining = remaining;
           bestRemainingMed = remainingMedOpen.length;
           bestIndices = [i, j, k];
