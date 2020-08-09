@@ -538,7 +538,7 @@ const solveGridSmallFind = (grid: boolean[][], medFound: boolean, largeFound: bo
   const openTallCoordSet = getOpenCoordinates(2, 3, grid);
   const openMedCoordSet = getOpenCoordinates(2, 2, grid);
 
-  let bestRemaining = 0; // In this solver mode, higher is better (since we want to hide from the med)
+  let bestRemaining = -1; // In this solver mode, higher is better (since we want to hide from the med)
   let bestIndex: number = 0;
   // Unlike in other solver modes, we can (and probably should) select outer cells.
   for (let i = 0; i < 36; i++) {
