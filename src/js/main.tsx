@@ -173,7 +173,7 @@ const GridSquare = (props: GridSquareProps) => {
 
 const Legend = () => {
   return (
-    <div style={{width: '200px', height: '350px', display: 'flex', flexFlow: 'column nowrap', justifyContent: 'space-between', padding: '10px', border: '1px solid black', backgroundColor: 'rgb(49, 32, 17)', color: 'white'}}>
+    <div style={{width: '200px', height: '350px', display: 'inline-flex', flexFlow: 'column nowrap', justifyContent: 'space-between', padding: '10px', border: '1px solid black', backgroundColor: 'rgb(49, 32, 17)', color: 'white'}}>
       <div style={{alignSelf: 'center'}}>Legend</div>
       <LegendRow cellStatus={CellStatus.Unopened} isTarget={false} desc={"Unopened"}/>
       <LegendRow cellStatus={CellStatus.Blocked} isTarget={false} desc={"Blocked"}/>
@@ -666,12 +666,10 @@ render(
     <br />
     In general, solver recommendations are not necessarily to be followed blindly.  Opening an entire picture often takes precedence over the solver recommendation.  Use best judgment.
     <hr />
-    <div style={{display: 'flex', width: '700px', justifyContent: 'space-between'}}>
-      <div>
-        <Grid />
-      </div>
-      <Legend />
+    <div style={{display: 'inline-block', marginRight: '50px', verticalAlign: 'top'}}>
+      <Grid />
     </div>
+    <Legend />
   </div>,
   document.getElementById("root"),
 );
