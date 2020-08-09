@@ -13,6 +13,14 @@ enum CellStatus {
   Medium,
 }
 
+const COLORS = {
+  [CellStatus.Unopened]: 'rgb(76, 53, 50)',
+  [CellStatus.Blocked]: 'rgb(107, 93, 75)',
+  [CellStatus.Empty]: 'rgb(198, 173, 143)',
+  [CellStatus.Large]: 'rgb(121, 141, 159)',
+  [CellStatus.Medium]: 'rgb(107, 118, 79)',
+}
+
 interface SolverOptions {
   attempt: number;
 }
@@ -149,16 +157,8 @@ interface GridSquareProps {
 }
 
 const GridSquare = (props: GridSquareProps) => {
-  const colors = {
-    [CellStatus.Unopened]: 'rgb(76, 53, 50)',
-    [CellStatus.Blocked]: 'rgb(107, 93, 75)',
-    [CellStatus.Empty]: 'rgb(198, 173, 143)',
-    [CellStatus.Large]: 'rgb(121, 141, 159)',
-    [CellStatus.Medium]: 'rgb(107, 118, 79)',
-  }
-
   const style = {
-    backgroundColor: colors[props.cellStatus],
+    backgroundColor: COLORS[props.cellStatus],
     border: props.isTarget? '2px dashed red' : '1px solid rgb(108, 103, 85)',
     gridColumn: props.coordinates.x + 1,
     gridRow: props.coordinates.y + 1,
@@ -169,6 +169,44 @@ const GridSquare = (props: GridSquareProps) => {
     <div style={style} onClick={props.leftClickHandler} onContextMenu={props.rightClickHandler}>
     </div>
   );
+}
+
+const Legend = () => {
+  return (
+    <div style={{width: '200px', height: '350px', display: 'flex', flexFlow: 'column nowrap', justifyContent: 'space-between', padding: '10px', border: '1px solid black', backgroundColor: 'rgb(49, 32, 17)', color: 'white'}}>
+      <div style={{alignSelf: 'center'}}>Legend</div>
+      <LegendRow cellStatus={CellStatus.Unopened} isTarget={false} desc={"Unopened"}/>
+      <LegendRow cellStatus={CellStatus.Blocked} isTarget={false} desc={"Blocked"}/>
+      <LegendRow cellStatus={CellStatus.Empty} isTarget={false} desc={"Empty"}/>
+      <LegendRow cellStatus={CellStatus.Large} isTarget={false} desc={"Large"}/>
+      <LegendRow cellStatus={CellStatus.Medium} isTarget={false} desc={"Medium"}/>
+      <LegendRow cellStatus={CellStatus.Unopened} isTarget={true} desc={"Recommended"}/>
+    </div>
+  )
+}
+
+interface LegendRowProps {
+  cellStatus: CellStatus;
+  desc: string;
+  isTarget: boolean;
+}
+
+const LegendRow = (props: LegendRowProps) => {
+  const squareStyle = {
+    backgroundColor: COLORS[props.cellStatus],
+    border: props.isTarget? '2px dashed red' : '1px solid rgb(108, 103, 85)',
+    borderRadius: '3px',
+    width: '40px',
+    height: '40px',
+    marginRight: '10px',
+  }
+  return (
+    <div style={{display: 'flex', alignItems: 'center'}}>
+      <div style={squareStyle}>
+      </div>
+      {props.desc}
+    </div>
+  )
 }
 
 interface Coordinates {
@@ -613,9 +651,9 @@ render(
     <h2>
       Instructions
     </h2>
-    Left click to cycle between opened square types: unopened - empty (beige) - large (blue) - medium (green)
+    Left click to cycle between opened square types: <span style={{backgroundColor: COLORS[CellStatus.Unopened], color: 'white'}}>unopened</span> - <span style={{backgroundColor: COLORS[CellStatus.Empty], color: 'white'}}>empty</span> - <span style={{backgroundColor: COLORS[CellStatus.Large], color: 'white'}}>large</span> - <span style={{backgroundColor: COLORS[CellStatus.Medium], color: 'white'}}>medium</span>
     <br />
-    Right click to toggle whether a cell is blocked off.
+    Right click to toggle whether a cell is <span style={{backgroundColor: COLORS[CellStatus.Blocked], color: 'white'}}>blocked off</span>.
     <br />
     Inputting the attempt number changes the solver behavior.  If you have not yet earned a retelling this week, select attempt 1.  Otherwise, select attempt 2.
     The solver will prioritize earning a retelling on the first attempt, but prioritize earning maximum leaves on the second attempt.
@@ -628,7 +666,12 @@ render(
     <br />
     In general, solver recommendations are not necessarily to be followed blindly.  Opening an entire picture often takes precedence over the solver recommendation.  Use best judgment.
     <hr />
-    <Grid />
+    <div style={{display: 'flex', width: '700px', justifyContent: 'space-between'}}>
+      <div>
+        <Grid />
+      </div>
+      <Legend />
+    </div>
   </div>,
   document.getElementById("root"),
 );
