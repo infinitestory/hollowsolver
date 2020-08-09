@@ -13,8 +13,13 @@ enum CellStatus {
   Medium,
 }
 
+interface SolverOptions {
+  attempt: number;
+}
+
 interface GridState {
   grid: CellStatus[][];
+  solverOptions: SolverOptions;
 }
 
 interface GridProps {
@@ -26,14 +31,39 @@ class Grid extends React.Component<GridProps, GridState> {
     super(props);
     this.state = {
       grid: [
-  [0, 0, 0, 0, 0, 0],
-  [0, 0, 1, 0, 0, 0],
-  [0, 0, 0, 0, 1, 0],
-  [0, 0, 0, 0, 0, 1],
-  [0, 1, 0, 0, 0, 0],
-  [0, 0, 0, 1, 0, 0],
-],
+        [0, 0, 0, 0, 0, 0],
+        [0, 0, 1, 0, 0, 0],
+        [0, 0, 0, 0, 1, 0],
+        [0, 0, 0, 0, 0, 1],
+        [0, 1, 0, 0, 0, 0],
+        [0, 0, 0, 1, 0, 0],
+      ],
+      solverOptions: {
+        attempt: 1,
+      },
     };
+  }
+
+  onReset = () => {
+    this.setState({
+      grid: [
+        [0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0],
+      ],
+    })
+  }
+
+  onChangeAttempt = (event: React.ChangeEvent) => {
+    event.preventDefault();
+    this.setState({
+      solverOptions: {
+        attempt: Number((event.target as any).value)
+      }
+    });
   }
 
   toggleCellBlocked = (coords: Coordinates) => {
@@ -65,7 +95,7 @@ class Grid extends React.Component<GridProps, GridState> {
   }
 
   render() {
-    const targetCoordinates = SolveGrid(this.state.grid);
+    const targetCoordinates = SolveGrid(this.state.grid, this.state.solverOptions);
 
     const wrapperStyle = {
       display: 'grid',
@@ -80,6 +110,18 @@ class Grid extends React.Component<GridProps, GridState> {
     }
 
     return (
+      <>
+      <div>
+        Attempt number:
+        <select value={this.state.solverOptions.attempt} onChange={this.onChangeAttempt}>
+          <option value="1">1</option>
+          <option value="2">2</option>
+        </select>
+        <button style={{marginLeft: '20px'}} type="button" onClick={this.onReset}>
+          Reset grid
+        </button>
+      </div>
+      <br />
       <div style={wrapperStyle}>{
         range(36).map(v => {
           const coords = convertToCoordinates(v, false);
@@ -93,6 +135,7 @@ class Grid extends React.Component<GridProps, GridState> {
           return <GridSquare {...gridSquareProps} key={`grid-${coords.x}-${coords.y}`}/>
         })
       }</div>
+      </>
     );
   }
 }
@@ -133,7 +176,7 @@ interface Coordinates {
   y: number;
 }
 
-const SolveGrid = (fullGrid: CellStatus[][]) => {
+const SolveGrid = (fullGrid: CellStatus[][], solverOptions: SolverOptions) => {
   /*
    Compute some statistics about the grid:
    # of squares marked as Large
@@ -141,13 +184,20 @@ const SolveGrid = (fullGrid: CellStatus[][]) => {
    # of squares marked as Empty
    # of remaining attempts after opening the Large
    These will be used to determine solver mode as follows:
-   If Large is unfound, solver mode is default
-     In this mode, the comparison metric will be the # of 2x3s remaining when removing 3 test squares from grid
-     and tiebreak metric is weighted 2x3s (and 2x2s, if # remaining attempts is at least 9 and medium is unfound) remaining
-   If Large is found, but Medium is unfound, and # remaining attempts is at least 4 after accounting for finishing the Large, solver mode is med-find
-     In this mode, the comparison metric will be the # of 2x2s remaining when removing #attempts test squares from grid
-   In any other case, solver mode is small-find
-     In this mode, the comparison metric will be the sum of # 2x3s and # 2x2s remaining when removing a test square from the grid
+   Attempt #1 (prioritize Large):
+     If Large is unfound, solver mode is default
+       In this mode, the comparison metric is the # of 2x3s remaining when removing 3 test squares from grid
+       and tiebreak metric is weighted 2x3s (and 2x2s, if # remaining attempts is at least 9 and medium is unfound) remaining
+     If Large is found, but Medium is unfound, and # remaining attempts is at least 4 after accounting for finishing the Large, solver mode is med-find
+       In this mode, the comparison metric is the # of 2x2s remaining when removing #attempts test squares from grid
+     In any other case, solver mode is small-find
+       In this mode, the comparison metric is the sum of # 2x3s and # 2x2s remaining when removing a test square from the grid
+   Attempt #2 (prioritize Medium):
+     If Medium is unfound, solver mode is weighted-med-find
+       In this mode, the comparison metric will be the weighted # of 2x2s (and 2x3s, if # remaining attempts is at least 9 and large is unfound) remaining when removing 3 test squares from grid
+     If Medium is found, but Large is unfound, and # remaining attempts is at least 4 after accounting for finishing the Medium, solver mode is large-find
+       In this mode, the comparison metric is # of 2x3s remaining when removing #attempts test squares from grid
+     In any other case, solver mode is small-find
    */
 
   var largeSquares = 0;
@@ -164,20 +214,45 @@ const SolveGrid = (fullGrid: CellStatus[][]) => {
     }
   }));
 
-  const remainingAttemptsAfterLargeOpen = 5 - emptySquares;
+  const remainingAttempts = 11 - largeSquares - mediumSquares - emptySquares;
+  if (solverOptions.attempt == 1) {
+    const remainingAttemptsAfterLargeOpen = 5 - emptySquares;
 
-  if (largeSquares == 0) {
-    // If no attempts are burned on Empty, we should check mediums up to depth 3
-    // If 1 attempt is burned, we should check mediums up to depth 2
-    // etc.
-    const medDepth = (mediumSquares == 0) ? Math.max(remainingAttemptsAfterLargeOpen - 2, 0) : 0;
-    return solveGridDefault(convertGrid(fullGrid), medDepth);
-  } else if (mediumSquares == 0 && remainingAttemptsAfterLargeOpen >= 4) {
-    // med-find solve
-    return solveGridMedFind(convertGrid(fullGrid), remainingAttemptsAfterLargeOpen - 3);
+    if (largeSquares == 0 && remainingAttempts >= 6) {
+      // If no attempts are burned on Empty, we should check mediums up to depth 3
+      // If 1 attempt is burned, we should check mediums up to depth 2
+      // etc.
+      const medDepth = (mediumSquares == 0) ? Math.max(remainingAttemptsAfterLargeOpen - 2, 0) : 0;
+      console.log('solver mode: default');
+      return solveGridDefault(convertGrid(fullGrid), medDepth);
+    } else if (mediumSquares == 0 && remainingAttemptsAfterLargeOpen >= 4) {
+      // med-find solve
+      console.log('solver mode: med-find');
+      return solveGridMedFind(convertGrid(fullGrid), remainingAttemptsAfterLargeOpen - 3);
+    } else {
+      // small-find solve
+      console.log('solver mode: small-find');
+      return solveGridSmallFind(convertGrid(fullGrid), mediumSquares != 0, largeSquares != 0);
+    }
   } else {
-    // small-find solve
-    return solveGridSmallFind(convertGrid(fullGrid));
+    const remainingAttemptsAfterMediumOpen = 7 - emptySquares;
+
+    if (mediumSquares == 0 && remainingAttempts >= 4) {
+      // If no attempts are burned on Empty, we should check large up to depth 3
+      // If 1 attempt is burned, we should check large up to depth 2
+      // etc.
+      const largeDepth = (mediumSquares == 0) ? Math.max(remainingAttemptsAfterMediumOpen - 4, 0) : 0;
+      console.log('solver mode: weighted-med-find');
+      return solveGridWeightedMedFind(convertGrid(fullGrid), largeDepth);
+    } else if (largeSquares == 0 && remainingAttemptsAfterMediumOpen >= 6) {
+      // large-find solve
+      console.log('solver mode: large-find');
+      return solveGridLargeFind(convertGrid(fullGrid), remainingAttemptsAfterMediumOpen - 5);
+    } else {
+      // small-find solve
+      console.log('solver mode: small-find');
+      return solveGridSmallFind(convertGrid(fullGrid), mediumSquares != 0, largeSquares != 0);
+    }
   }
 }
 
@@ -186,7 +261,7 @@ const solveGridDefault = (grid: boolean[][], medDepth: number = 0) => {
   const openWideCoordSet = getOpenCoordinates(3, 2, grid);
   const openTallCoordSet = getOpenCoordinates(2, 3, grid);
 
-  // Compute tiebreaker - number of 2x2s covered.
+  // Compute for tiebreaker - number of 2x2s covered.
   const openMedCoordSet = getOpenCoordinates(2, 2, grid);
 
   // hardcoded lul
@@ -204,6 +279,7 @@ const solveGridDefault = (grid: boolean[][], medDepth: number = 0) => {
     filledGrid1[ci.y][ci.x] = true;
     const remainingWideOpen1 = getOpenCoordinates(3, 2, filledGrid1, openWideCoordSet).length;
     const remainingTallOpen1 = getOpenCoordinates(2, 3, filledGrid1, openTallCoordSet).length;
+    const remainingLargeOpen1 = remainingWideOpen1 + remainingTallOpen1;
     const remainingMedOpen1 = getOpenCoordinates(2, 2, filledGrid1, openMedCoordSet).length;
 
     for (let j = 0; j < 16; j++) {
@@ -217,6 +293,7 @@ const solveGridDefault = (grid: boolean[][], medDepth: number = 0) => {
       filledGrid2[cj.y][cj.x] = true;
       const remainingWideOpen2 = getOpenCoordinates(3, 2, filledGrid2, openWideCoordSet).length;
       const remainingTallOpen2 = getOpenCoordinates(2, 3, filledGrid2, openTallCoordSet).length;
+      const remainingLargeOpen2 = remainingWideOpen2 + remainingTallOpen2;
       const remainingMedOpen2 = getOpenCoordinates(2, 2, filledGrid2, openMedCoordSet).length;
 
       for (let k = 0; k < 16; k++) {
@@ -231,17 +308,15 @@ const solveGridDefault = (grid: boolean[][], medDepth: number = 0) => {
         filledGrid3[ck.y][ck.x] = true;
         const remainingWideOpen3 = getOpenCoordinates(3, 2, filledGrid3, openWideCoordSet).length;
         const remainingTallOpen3 = getOpenCoordinates(2, 3, filledGrid3, openTallCoordSet).length;
+        const remainingLargeOpen3 = remainingWideOpen3 + remainingTallOpen3;
         const remainingMedOpen3 = getOpenCoordinates(2, 2, filledGrid3, openMedCoordSet).length;
 
-        const remaining = remainingWideOpen3 + remainingTallOpen3;
-        const tiebreaker = remainingWideOpen1 + remainingTallOpen1 + (medDepth >= 1 ? remainingMedOpen1 : 0)
-          + remainingWideOpen2 + remainingTallOpen2 + (medDepth >= 2 ? remainingMedOpen2 : 0)
-          + remainingWideOpen3 + remainingTallOpen3 + (medDepth >= 3 ? remainingMedOpen3 : 0)
+        const tiebreaker = remainingLargeOpen1+ (medDepth >= 1 ? remainingMedOpen1 : 0)
+          + remainingLargeOpen2 + (medDepth >= 2 ? remainingMedOpen2 : 0)
+          + remainingLargeOpen3 + (medDepth >= 3 ? remainingMedOpen3 : 0)
 
-        if ((remaining < bestRemaining) || (remaining == bestRemaining && tiebreaker < bestTiebreaker)) {
-          console.log(remaining);
-          console.log(tiebreaker);
-          bestRemaining = remaining;
+        if ((remainingLargeOpen3 < bestRemaining) || (remainingLargeOpen3 == bestRemaining && tiebreaker < bestTiebreaker)) {
+          bestRemaining = remainingLargeOpen3;
           bestTiebreaker = tiebreaker;
           bestIndices = [i, j, k];
         }
@@ -249,7 +324,73 @@ const solveGridDefault = (grid: boolean[][], medDepth: number = 0) => {
     }
   }
 
-  console.log(bestIndices);
+  return convertToCoordinates(bestIndices[0], true);
+}
+
+const solveGridWeightedMedFind = (grid: boolean[][], largeDepth: number) => {
+  // Compute the coordinates of all open 2x2, 2x3, and 3x2 rectangles as-is.
+  const openWideCoordSet = getOpenCoordinates(3, 2, grid);
+  const openTallCoordSet = getOpenCoordinates(2, 3, grid);
+  const openMedCoordSet = getOpenCoordinates(2, 2, grid);
+
+  // hardcoded lul
+  // depth 3 brute force of the middle 4x4
+  let bestMetric = Number.MAX_SAFE_INTEGER;
+  let bestIndices: [number, number, number] = [0, 0, 0];
+  for (let i = 0; i < 16; i++) {
+    const ci = convertToCoordinates(i, true);
+    if (grid[ci.y][ci.x]) {
+      continue;
+    }
+    // Create a grid copy with only the first square set
+    let filledGrid1 = cloneDeep(grid);
+    filledGrid1[ci.y][ci.x] = true;
+    const remainingWideOpen1 = getOpenCoordinates(3, 2, filledGrid1, openWideCoordSet).length;
+    const remainingTallOpen1 = getOpenCoordinates(2, 3, filledGrid1, openTallCoordSet).length;
+    const remainingLargeOpen1 = remainingWideOpen1 + remainingTallOpen1;
+    const remainingMedOpen1 = getOpenCoordinates(2, 2, filledGrid1, openMedCoordSet).length;
+
+    for (let j = 0; j < 16; j++) {
+      if (j == i) { continue; }
+      const cj = convertToCoordinates(j, true);
+      if (grid[cj.y][cj.x]) {
+        continue;
+      }
+      // Create a grid copy with the first and second squares set
+      let filledGrid2 = cloneDeep(filledGrid1);
+      filledGrid2[cj.y][cj.x] = true;
+      const remainingWideOpen2 = getOpenCoordinates(3, 2, filledGrid2, openWideCoordSet).length;
+      const remainingTallOpen2 = getOpenCoordinates(2, 3, filledGrid2, openTallCoordSet).length;
+      const remainingLargeOpen2 = remainingWideOpen2 + remainingTallOpen2;
+      const remainingMedOpen2 = getOpenCoordinates(2, 2, filledGrid2, openMedCoordSet).length;
+
+      for (let k = 0; k < 16; k++) {
+        if (k == i || k == j) { continue; }
+
+        const ck = convertToCoordinates(k, true);
+        if (grid[ck.y][ck.x]) {
+          continue;
+        }
+        // Create a grid copy with all three squares set
+        let filledGrid3 = cloneDeep(filledGrid2);
+        filledGrid3[ck.y][ck.x] = true;
+        const remainingWideOpen3 = getOpenCoordinates(3, 2, filledGrid3, openWideCoordSet).length;
+        const remainingTallOpen3 = getOpenCoordinates(2, 3, filledGrid3, openTallCoordSet).length;
+        const remainingLargeOpen3 = remainingWideOpen3 + remainingTallOpen3;
+        const remainingMedOpen3 = getOpenCoordinates(2, 2, filledGrid3, openMedCoordSet).length;
+
+        const metric = 3 * remainingMedOpen1 + (largeDepth >= 1 ? remainingLargeOpen1 : 0)
+          + 3 * remainingMedOpen2 + (largeDepth >= 2 ? remainingLargeOpen2 : 0)
+          + 3 * remainingMedOpen3 + (largeDepth >= 3 ? remainingLargeOpen3 : 0)
+
+        if (metric < bestMetric) {
+          bestMetric = metric;
+          bestIndices = [i, j, k];
+        }
+      }
+    }
+  }
+
   return convertToCoordinates(bestIndices[0], true);
 }
 
@@ -273,13 +414,11 @@ const solveGridMedFind = (grid: boolean[][], depth: number = 1) => {
       const remainingOpen = getOpenCoordinates(2, 2, filledGrid1, openCoordSet).length;
 
       if (remainingOpen < bestRemaining) {
-        console.log(remainingOpen);
         bestRemaining = remainingOpen;
         bestIndex = i;
       }
     }
 
-    console.log(bestIndex);
     return convertToCoordinates(bestIndex, true);
   } else {
     let bestRemaining = openCoordSet.length + 1;
@@ -310,8 +449,6 @@ const solveGridMedFind = (grid: boolean[][], depth: number = 1) => {
         const tiebreaker = remainingOpen1;
 
         if ((remaining < bestRemaining) || (remaining == bestRemaining && tiebreaker < bestTiebreaker)) {
-          console.log(remaining);
-          console.log(tiebreaker);
           bestRemaining = remaining;
           bestTiebreaker = tiebreaker;
           bestIndices = [i, j];
@@ -319,15 +456,87 @@ const solveGridMedFind = (grid: boolean[][], depth: number = 1) => {
       }
     }
 
-    console.log(bestIndices);
     return convertToCoordinates(bestIndices[0], true);
   }
 }
 
-const solveGridSmallFind = (grid: boolean[][]) => {
-  // This mode assumes that the large is already found and marked.
-  // Compute the coordinates of all open 2x2 rectangles as-is.
-  const openCoordSet = getOpenCoordinates(2, 2, grid);
+// depth must always be 1 or 2
+const solveGridLargeFind = (grid: boolean[][], depth: number = 1) => {
+  // Compute tiebreaker number of 2x3s and 3x2s covered as-is.
+  const openWideCoordSet = getOpenCoordinates(3, 2, grid);
+  const openTallCoordSet = getOpenCoordinates(2, 3, grid);
+
+  // Branched based on depth.
+  if (depth == 1) {
+    let bestRemaining = openWideCoordSet.length + openTallCoordSet.length + 1;
+    let bestIndex: number = 0;
+    for (let i = 0; i < 16; i++) {
+      const ci = convertToCoordinates(i, true);
+      if (grid[ci.y][ci.x]) {
+        continue;
+      }
+      // Create a grid copy with only the first square set
+      let filledGrid1 = cloneDeep(grid);
+      filledGrid1[ci.y][ci.x] = true;
+      const remainingOpenWide = getOpenCoordinates(3, 2, filledGrid1, openWideCoordSet).length;
+      const remainingOpenTall = getOpenCoordinates(2, 3, filledGrid1, openTallCoordSet).length;
+      const remainingOpen = remainingOpenWide + remainingOpenTall;
+
+      if (remainingOpen < bestRemaining) {
+        bestRemaining = remainingOpen;
+        bestIndex = i;
+      }
+    }
+
+    return convertToCoordinates(bestIndex, true);
+  } else {
+    let bestRemaining = openWideCoordSet.length + openTallCoordSet.length + 1;
+    let bestTiebreaker = Number.MAX_SAFE_INTEGER;
+    let bestIndices: [number, number] = [0, 0];
+    for (let i = 0; i < 16; i++) {
+      const ci = convertToCoordinates(i, true);
+      if (grid[ci.y][ci.x]) {
+        continue;
+      }
+      // Create a grid copy with only the first square set
+      let filledGrid1 = cloneDeep(grid);
+      filledGrid1[ci.y][ci.x] = true;
+      const remainingOpenWide1 = getOpenCoordinates(3, 2, filledGrid1, openWideCoordSet).length;
+      const remainingOpenTall1 = getOpenCoordinates(2, 3, filledGrid1, openTallCoordSet).length;
+      const remainingOpen1 = remainingOpenWide1 + remainingOpenTall1;
+
+      for (let j = 0; j < 16; j++) {
+        if (j == i) { continue; }
+        const cj = convertToCoordinates(j, true);
+        if (grid[cj.y][cj.x]) {
+          continue;
+        }
+        // Create a grid copy with the first and second squares set
+        let filledGrid2 = cloneDeep(filledGrid1);
+        filledGrid2[cj.y][cj.x] = true;
+        const remainingOpenWide2 = getOpenCoordinates(3, 2, filledGrid2, openWideCoordSet).length;
+        const remainingOpenTall2 = getOpenCoordinates(2, 3, filledGrid2, openTallCoordSet).length;
+        const remainingOpen2 = remainingOpenWide2 + remainingOpenTall2;
+
+        const remaining = remainingOpen1 + remainingOpen2;
+        const tiebreaker = remainingOpen1;
+
+        if ((remaining < bestRemaining) || (remaining == bestRemaining && tiebreaker < bestTiebreaker)) {
+          bestRemaining = remaining;
+          bestTiebreaker = tiebreaker;
+          bestIndices = [i, j];
+        }
+      }
+    }
+
+    return convertToCoordinates(bestIndices[0], true);
+  }
+}
+
+const solveGridSmallFind = (grid: boolean[][], medFound: boolean, largeFound: boolean) => {
+  const openWideCoordSet = getOpenCoordinates(3, 2, grid);
+  const openTallCoordSet = getOpenCoordinates(2, 3, grid);
+  const openMedCoordSet = getOpenCoordinates(2, 2, grid);
 
   let bestRemaining = 0; // In this solver mode, higher is better (since we want to hide from the med)
   let bestIndex: number = 0;
@@ -340,16 +549,22 @@ const solveGridSmallFind = (grid: boolean[][]) => {
     // Create a grid copy with only the first square set
     let filledGrid1 = cloneDeep(grid);
     filledGrid1[ci.y][ci.x] = true;
-    const remainingOpen = getOpenCoordinates(2, 2, filledGrid1, openCoordSet).length;
 
-    if (remainingOpen > bestRemaining) {
-      console.log(remainingOpen);
-      bestRemaining = remainingOpen;
+    let remaining = 0;
+    if (!medFound) {
+      remaining += getOpenCoordinates(2, 2, filledGrid1, openMedCoordSet).length;
+    }
+    if (!largeFound) {
+      remaining += getOpenCoordinates(3, 2, filledGrid1, openWideCoordSet).length;
+      remaining += getOpenCoordinates(2, 3, filledGrid1, openTallCoordSet).length;
+    }
+
+    if (remaining > bestRemaining) {
+      bestRemaining = remaining;
       bestIndex = i;
     }
   }
 
-  console.log(bestIndex);
   return convertToCoordinates(bestIndex, false);
 }
 
@@ -394,7 +609,6 @@ const convertGrid = (grid: CellStatus[][]) => {
 }
 
 render(
-  <>
   <div style={{fontFamily: 'Roboto'}}>
     <h2>
       Instructions
@@ -403,11 +617,18 @@ render(
     <br />
     Right click to toggle whether a cell is blocked off.
     <br />
-    It's highly recommended that, on your first attempt of the week, you fully open the large picture as soon as you see it.
+    Inputting the attempt number changes the solver behavior.  If you have not yet earned a retelling this week, select attempt 1.  Otherwise, select attempt 2.
+    The solver will prioritize earning a retelling on the first attempt, but prioritize earning maximum leaves on the second attempt.
+    <br />
+    It's highly recommended that, on your first attempt, you fully open the large picture as soon as you see it.
     Marking the full large picture on the solver will improve its recommendations.
-  </div>
-  <br />
-  <Grid />
-  </>,
+    <br />
+    It's also recommended that, if you find a square corresponding to a picture but you don't have enough attempts to reveal the entire thing, that you block it off on the solver.
+    This will also improve its recommendations.
+    <br />
+    In general, solver recommendations are not necessarily to be followed blindly.  Opening an entire picture often takes precedence over the solver recommendation.  Use best judgment.
+    <hr />
+    <Grid />
+  </div>,
   document.getElementById("root"),
 );
