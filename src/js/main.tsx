@@ -18,6 +18,14 @@ enum AdditionalRecommendation {
   OpenLarge,
   OpenMedium,
   BlockLarge,
+  UseDefaultSecond,
+  OpenLargeForPoints,
+}
+
+enum SolverAttempt {
+  First,
+  Second,
+  SecondAlternate,
 }
 
 const COLORS = {
@@ -29,7 +37,7 @@ const COLORS = {
 }
 
 interface SolverOptions {
-  attempt: number;
+  attempt: SolverAttempt;
 }
 
 interface GridState {
@@ -54,7 +62,7 @@ class Grid extends React.Component<GridProps, GridState> {
         [0, 0, 0, 1, 0, 0],
       ],
       solverOptions: {
-        attempt: 1,
+        attempt: SolverAttempt.First,
       },
     };
   }
@@ -76,7 +84,7 @@ class Grid extends React.Component<GridProps, GridState> {
     event.preventDefault();
     this.setState({
       solverOptions: {
-        attempt: Number((event.target as any).value)
+        attempt: (event.target as any).value as SolverAttempt
       }
     });
   }
@@ -115,12 +123,12 @@ class Grid extends React.Component<GridProps, GridState> {
     let recsComponent = undefined;
     if (recommendations.length != 0) {
       recsComponent = (
-        <div style={{width: '385px'}}>
-          <h1>⚠️ Recommendations</h1>
-          {
-            recommendations.map(r => <RecommendationRow recommendation={r} />)
-          }
-        </div>
+        <>
+        <h1>⚠️ Recommendations</h1>
+        {
+          recommendations.map(r => <RecommendationRow recommendation={r} />)
+        }
+        </>
       )
     }
 
@@ -141,8 +149,9 @@ class Grid extends React.Component<GridProps, GridState> {
       <div>
         Attempt number:
         <select value={this.state.solverOptions.attempt} onChange={this.onChangeAttempt}>
-          <option value="1">1</option>
-          <option value="2">2</option>
+          <option value={SolverAttempt.First}>1</option>
+          <option value={SolverAttempt.Second}>2</option>
+          <option value={SolverAttempt.SecondAlternate}>2 (alternate)</option>
         </select>
         <button style={{marginLeft: '20px'}} type="button" onClick={this.onReset}>
           Reset grid
@@ -162,7 +171,9 @@ class Grid extends React.Component<GridProps, GridState> {
           return <GridSquare {...gridSquareProps} key={`grid-${coords.x}-${coords.y}`}/>
         })
       }</div>
-      {recsComponent}
+      <div style={{height: '200px', width: '385px'}}>
+        {recsComponent}
+      </div>
       </>
     );
   }
@@ -196,24 +207,37 @@ interface RecommendationRowProps {
 }
 
 const RecommendationRow = (props: RecommendationRowProps) => {
-  if (props.recommendation == AdditionalRecommendation.OpenLarge) {
-    return (
-      <div>
-        Fully open the <span style={{backgroundColor: COLORS[CellStatus.Large], color: 'white', margin: '-2px', padding: '2px'}}>large drawing</span>, both in-game and in the solver, to ensure a retelling and improve solver performance. 
-      </div>
-    )
-  } else if (props.recommendation == AdditionalRecommendation.OpenMedium) {
-    return (
-      <div>
-        Fully open the <span style={{backgroundColor: COLORS[CellStatus.Medium], color: 'white', margin: '-2px', padding: '2px'}}>medium drawing</span>, both in-game and in the solver, to maximize expected score and improve solver performance.
-      </div>
-    )
-  } else if (props.recommendation == AdditionalRecommendation.BlockLarge) {
-    return (
-      <div>
-        Fully <span style={{backgroundColor: COLORS[CellStatus.Blocked], color: 'white', margin: '-2px', padding: '2px'}}>block off</span> the large drawing on the solver (<em>don't touch it in-game</em>) to improve solver performance.
-      </div>
-    )
+  switch(props.recommendation) {
+    case AdditionalRecommendation.OpenLarge:
+      return (
+        <div>
+          Fully open the <span style={{backgroundColor: COLORS[CellStatus.Large], color: 'white', margin: '-2px', padding: '2px'}}>large drawing</span>, both in-game and in the solver, to ensure a retelling and improve solver performance. 
+        </div>
+      )
+    case AdditionalRecommendation.OpenMedium:
+      return (
+        <div>
+          Fully open the <span style={{backgroundColor: COLORS[CellStatus.Medium], color: 'white', margin: '-2px', padding: '2px'}}>medium drawing</span>, both in-game and in the solver, to maximize expected score and improve solver performance.
+        </div>
+      )
+    case AdditionalRecommendation.BlockLarge:
+      return (
+        <div>
+          Fully <span style={{backgroundColor: COLORS[CellStatus.Blocked], color: 'white', margin: '-2px', padding: '2px'}}>block off</span> the large drawing on the solver (<em>don't touch it in-game</em>) to improve solver performance.
+        </div>
+      )
+    case AdditionalRecommendation.UseDefaultSecond:
+      return (
+        <div>
+          You are currently using the alternate mode for the 2nd attempt.  It's recommended to use the default mode for the 2nd attempt, but you can use this if you prefer a lower but steadier leaf income.
+        </div>
+      )
+    case AdditionalRecommendation.OpenLargeForPoints:
+      return (
+        <div>
+          Fully open the <span style={{backgroundColor: COLORS[CellStatus.Large], color: 'white', margin: '-2px', padding: '2px'}}>large drawing</span>, both in-game and in the solver, to improve solver performance.
+        </div>
+      )
   }
 }
 
@@ -276,10 +300,16 @@ const SolveGrid = (fullGrid: CellStatus[][], solverOptions: SolverOptions) => {
        In this mode, the comparison metric is the # of 2x2s remaining when removing #attempts test squares from grid
      In any other case, solver mode is small-find
        In this mode, the comparison metric is the sum of # 2x3s and # 2x2s remaining when removing a test square from the grid
-   Attempt #2 (prioritize Medium):
+   Attempt #2 (prioritize Medium, ignore Large):
      If Medium is unfound, and there are at least 6 total attempts remaining, solver mode is weighted-med-find
        In this mode, the comparison metric will be the weighted # of 2x2s remaining when removing 3 test squares from grid, prioritizing finding the medium faster.
      If Medium is unfound, and there are at least 4 total attempts remaining, solver mode is med-find
+     In any other case, solver mode is small-find
+   Attempt #2-alternate (prioritize Medium):
+     If Medium is unfound, solver mode is weighted-all-find
+       In this mode, the comparison metric will be the weighted # of 2x2s (and 2x3s, if # remaining attempts is at least 9 and large is unfound) remaining when removing 3 test squares from grid
+     If Medium is found, but Large is unfound, and # remaining attempts is at least 4 after accounting for finishing the Medium, solver mode is large-find
+       In this mode, the comparison metric is # of 2x3s remaining when removing #attempts test squares from grid
      In any other case, solver mode is small-find
    */
 
@@ -301,7 +331,7 @@ const SolveGrid = (fullGrid: CellStatus[][], solverOptions: SolverOptions) => {
   let target: Coordinates;
   let recommendations: AdditionalRecommendation[] = [];
 
-  if (solverOptions.attempt == 1) {
+  if (solverOptions.attempt == SolverAttempt.First) {
     const remainingAttemptsAfterLargeOpen = 5 - emptySquares;
 
     if (largeSquares == 0 && remainingAttempts >= 6) {
@@ -324,8 +354,8 @@ const SolveGrid = (fullGrid: CellStatus[][], solverOptions: SolverOptions) => {
     if (largeSquares > 0 && largeSquares < 6 && remainingAttempts + largeSquares >= 6) {
       recommendations.push(AdditionalRecommendation.OpenLarge);
     }
-  } else {
-    const remainingAttemptsAfterMediumOpen = 7 - emptySquares;
+  } else if (solverOptions.attempt == SolverAttempt.Second) {
+    const remainingAttemptsAfterMediumOpen = 7 - emptySquares - largeSquares;
 
     if (mediumSquares == 0 && remainingAttemptsAfterMediumOpen >= 2) {
       console.log('solver mode: weighted-med-find');
@@ -345,6 +375,39 @@ const SolveGrid = (fullGrid: CellStatus[][], solverOptions: SolverOptions) => {
     }
 
     if (largeSquares > 0) {
+      recommendations.push(AdditionalRecommendation.BlockLarge);
+    }
+  } else {
+    const remainingAttemptsAfterMediumOpen = 7 - emptySquares - largeSquares;
+
+    if (mediumSquares == 0 && remainingAttempts >= 4) {
+      // If no attempts are burned on Empty, we should check large up to depth 3
+      // If 1 attempt is burned, we should check large up to depth 2
+      // etc.
+      const largeDepth = (largeSquares == 0) ? Math.max(remainingAttemptsAfterMediumOpen - 4, 0) : 0;
+      console.log('solver mode: weighted-all-find');
+      target = solveGridWeightedAllFind(convertGrid(fullGrid), largeDepth);
+    } else if (largeSquares == 0 && remainingAttemptsAfterMediumOpen >= 6) {
+      // large-find solve
+      console.log('solver mode: large-find');
+      target = solveGridLargeFind(convertGrid(fullGrid), remainingAttemptsAfterMediumOpen - 5);
+    } else {
+      // small-find solve
+      console.log('solver mode: small-find');
+      target = solveGridSmallFind(convertGrid(fullGrid), mediumSquares != 0, largeSquares != 0);
+    }
+
+    recommendations.push(AdditionalRecommendation.UseDefaultSecond);
+
+    if (mediumSquares > 0 && mediumSquares < 4 && remainingAttempts + mediumSquares >= 4) {
+      recommendations.push(AdditionalRecommendation.OpenMedium);
+    }
+
+    if (mediumSquares == 4 && largeSquares > 0 && largeSquares < 6 && remainingAttempts + largeSquares >= 6) {
+      recommendations.push(AdditionalRecommendation.OpenLargeForPoints);
+    }
+
+    if (largeSquares > 0 && largeSquares < 6 && emptySquares >= 2) {
       recommendations.push(AdditionalRecommendation.BlockLarge);
     }
   }
@@ -548,6 +611,73 @@ const solveGridMedFind = (grid: boolean[][], depth: number = 1) => {
   }
 }
 
+const solveGridWeightedAllFind = (grid: boolean[][], largeDepth: number) => {
+  // Compute the coordinates of all open 2x2, 2x3, and 3x2 rectangles as-is.
+  const openWideCoordSet = getOpenCoordinates(3, 2, grid);
+  const openTallCoordSet = getOpenCoordinates(2, 3, grid);
+  const openMedCoordSet = getOpenCoordinates(2, 2, grid);
+
+  // hardcoded lul
+  // depth 3 brute force of the middle 4x4
+  let bestMetric = Number.MAX_SAFE_INTEGER;
+  let bestIndices: [number, number, number] = [0, 0, 0];
+  for (let i = 0; i < 16; i++) {
+    const ci = convertToCoordinates(i, true);
+    if (grid[ci.y][ci.x]) {
+      continue;
+    }
+    // Create a grid copy with only the first square set
+    let filledGrid1 = cloneDeep(grid);
+    filledGrid1[ci.y][ci.x] = true;
+    const remainingWideOpen1 = getOpenCoordinates(3, 2, filledGrid1, openWideCoordSet).length;
+    const remainingTallOpen1 = getOpenCoordinates(2, 3, filledGrid1, openTallCoordSet).length;
+    const remainingLargeOpen1 = remainingWideOpen1 + remainingTallOpen1;
+    const remainingMedOpen1 = getOpenCoordinates(2, 2, filledGrid1, openMedCoordSet).length;
+
+    for (let j = 0; j < 16; j++) {
+      if (j == i) { continue; }
+      const cj = convertToCoordinates(j, true);
+      if (grid[cj.y][cj.x]) {
+        continue;
+      }
+      // Create a grid copy with the first and second squares set
+      let filledGrid2 = cloneDeep(filledGrid1);
+      filledGrid2[cj.y][cj.x] = true;
+      const remainingWideOpen2 = getOpenCoordinates(3, 2, filledGrid2, openWideCoordSet).length;
+      const remainingTallOpen2 = getOpenCoordinates(2, 3, filledGrid2, openTallCoordSet).length;
+      const remainingLargeOpen2 = remainingWideOpen2 + remainingTallOpen2;
+      const remainingMedOpen2 = getOpenCoordinates(2, 2, filledGrid2, openMedCoordSet).length;
+
+      for (let k = 0; k < 16; k++) {
+        if (k == i || k == j) { continue; }
+
+        const ck = convertToCoordinates(k, true);
+        if (grid[ck.y][ck.x]) {
+          continue;
+        }
+        // Create a grid copy with all three squares set
+        let filledGrid3 = cloneDeep(filledGrid2);
+        filledGrid3[ck.y][ck.x] = true;
+        const remainingWideOpen3 = getOpenCoordinates(3, 2, filledGrid3, openWideCoordSet).length;
+        const remainingTallOpen3 = getOpenCoordinates(2, 3, filledGrid3, openTallCoordSet).length;
+        const remainingLargeOpen3 = remainingWideOpen3 + remainingTallOpen3;
+        const remainingMedOpen3 = getOpenCoordinates(2, 2, filledGrid3, openMedCoordSet).length;
+
+        const metric = 3 * remainingMedOpen1 + (largeDepth >= 1 ? remainingLargeOpen1 : 0)
+          + 3 * remainingMedOpen2 + (largeDepth >= 2 ? remainingLargeOpen2 : 0)
+          + 3 * remainingMedOpen3 + (largeDepth >= 3 ? remainingLargeOpen3 : 0)
+
+        if (metric < bestMetric) {
+          bestMetric = metric;
+          bestIndices = [i, j, k];
+        }
+      }
+    }
+  }
+
+  return convertToCoordinates(bestIndices[0], true);
+}
+
 // depth must always be 1 or 2
 const solveGridLargeFind = (grid: boolean[][], depth: number = 1) => {
   // Compute tiebreaker number of 2x3s and 3x2s covered as-is.
@@ -708,13 +838,7 @@ render(
     Inputting the attempt number changes the solver behavior.  If you have not yet earned a retelling this week, select attempt 1.  Otherwise, select attempt 2.
     The solver will prioritize earning a retelling on the first attempt, but prioritize earning maximum leaves on the second attempt.
     <br />
-    It's highly recommended that, on your first attempt, you fully open the large picture as soon as you see it.
-    Marking the full large picture on the solver will improve its recommendations.
-    <br />
-    It's also recommended that, if you find a square corresponding to a picture but you don't have enough attempts to reveal the entire thing, that you block it off on the solver.
-    This will also improve its recommendations.
-    <br />
-    In general, solver recommendations are not necessarily to be followed blindly.  Opening an entire picture often takes precedence over the solver recommendation.  Use best judgment.
+    Additional recommendations will appear below the grid.  In general, solver recommendations are not necessarily to be followed blindly.  Use best judgment.
     <hr />
     <div style={{display: 'inline-block', marginRight: '50px', verticalAlign: 'top'}}>
       <Grid />
