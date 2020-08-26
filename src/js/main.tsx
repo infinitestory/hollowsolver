@@ -530,9 +530,7 @@ const solveGridWeightedMedFind = (grid: boolean[][]) => {
         filledGrid3[ck.y][ck.x] = true;
         const remainingMedOpen3 = getOpenCoordinates(2, 2, filledGrid3, openMedCoordSet).length;
 
-        const metric = 3 * remainingMedOpen1
-          + 2 * remainingMedOpen2
-          + 1 * remainingMedOpen3
+        const metric = remainingMedOpen1 + remainingMedOpen2 + remainingMedOpen3
 
         if (metric < bestMetric) {
           bestMetric = metric;
