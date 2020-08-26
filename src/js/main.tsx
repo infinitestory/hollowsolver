@@ -18,6 +18,7 @@ enum AdditionalRecommendation {
   OpenLarge,
   OpenMedium,
   BlockLarge,
+  BlockMedium,
   UseDefaultSecond,
   OpenLargeForPoints,
 }
@@ -226,6 +227,12 @@ const RecommendationRow = (props: RecommendationRowProps) => {
           Fully <span style={{backgroundColor: COLORS[CellStatus.Blocked], color: 'white', margin: '-2px', padding: '2px'}}>block off</span> the large drawing on the solver (<em>don't touch it in-game</em>) to improve solver performance.
         </div>
       )
+    case AdditionalRecommendation.BlockMedium:
+      return (
+        <div>
+          Fully <span style={{backgroundColor: COLORS[CellStatus.Blocked], color: 'white', margin: '-2px', padding: '2px'}}>block off</span> the medium drawing on the solver (<em>don't touch it in-game</em>) to improve solver performance.
+        </div>
+      )
     case AdditionalRecommendation.UseDefaultSecond:
       return (
         <div>
@@ -353,6 +360,14 @@ const SolveGrid = (fullGrid: CellStatus[][], solverOptions: SolverOptions) => {
 
     if (largeSquares > 0 && largeSquares < 6 && remainingAttempts + largeSquares >= 6) {
       recommendations.push(AdditionalRecommendation.OpenLarge);
+    }
+
+    if (largeSquares == 6 && mediumSquares > 0 && mediumSquares < 4 && emptySquares < 2) {
+      recommendations.push(AdditionalRecommendation.OpenMedium);
+    }
+
+    if (mediumSquares > 0 && mediumSquares < 4 && emptySquares >= 2) {
+      recommendations.push(AdditionalRecommendation.BlockMedium);
     }
   } else if (solverOptions.attempt == SolverAttempt.Second) {
     const remainingAttemptsAfterMediumOpen = 7 - emptySquares - largeSquares;
